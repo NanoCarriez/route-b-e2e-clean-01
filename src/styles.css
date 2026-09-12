@@ -1,0 +1,64 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #f3efe6;
+  --color-surface: #fbf8f1;
+  --color-fg: #1c1915;
+  --color-muted: #6f6a62;
+  --color-subtle: #918b82;
+  --color-primary: #2f4f4f;
+  --color-primary-fg: #f7f4ee;
+  --color-border: #e2dacd;
+  --color-hacer: #2f5d3a;
+  --color-hacer-bg: #e4efe6;
+  --color-revisar: #8a5a12;
+  --color-revisar-bg: #f5ead4;
+  --color-descartar: #8a2e2e;
+  --color-descartar-bg: #f5e2e0;
+  --color-error: #8a2e2e;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", "Times New Roman", ui-serif, Georgia, serif;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --shadow-panel: 0 1px 0 rgb(28 25 21 / 0.04), 0 12px 32px rgb(28 25 21 / 0.06);
+}
+
+@layer base {
+  html {
+    background: var(--color-bg);
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  input,
+  button {
+    font: inherit;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
