@@ -1,0 +1,55 @@
+name: nanochief-autowake-bridge-microtest
+
+on:
+  push:
+    branches:
+      - bridge/github-export-nanochief-autowake-microtest-01
+
+jobs:
+  wake-nanochief:
+    if: contains(github.event.head_commit.message, '[wake-nanochief]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST transformed push event to NanoChief Routine webhook
+        env:
+          NANOCHIEF_WEBHOOK_URL: ${{ secrets.NANOCHIEF_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        shell: bash
+        run: |
+          test -n "$NANOCHIEF_WEBHOOK_URL" || { echo 'Missing NANOCHIEF_WEBHOOK_URL'; exit 2; }
+          python - <<'PY' > /tmp/payload.json
+          import json, os
+          payload = {
+            "object_kind": "push",
+            "event_name": "push",
+            "ref": "refs/heads/wake/nanobot",
+            "before": os.environ.get("BEFORE"),
+            "after": os.environ.get("AFTER"),
+            "project": {
+              "path_with_namespace": os.environ.get("REPO"),
+              "web_url": "https://github.com/" + os.environ.get("REPO", "")
+            },
+            "commits": [{
+              "id": os.environ.get("AFTER"),
+              "message": os.environ.get("COMMIT_MESSAGE"),
+              "url": "https://github.com/" + os.environ.get("REPO", "") + "/commit/" + os.environ.get("AFTER", "")
+            }],
+            "bridge": {
+              "source": "github_actions_adapter",
+              "mission_id": "GITHUB_EXPORT_NANOCHIEF_AUTOWAKE_MICROTEST_01",
+              "gitlab_branch": "protocol/github-export-nanochief-autowake-microtest-01",
+              "mission_path": "handoff/GITHUB_EXPORT_NANOCHIEF_AUTOWAKE_MICROTEST_01_MISSION.md"
+            }
+          }
+          print(json.dumps(payload))
+          PY
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H 'Content-Type: application/json' \
+            -H 'X-Gitlab-Event: Push Hook' \
+            --data-binary @/tmp/payload.json \
+            "$NANOCHIEF_WEBHOOK_URL"
