@@ -243,7 +243,7 @@ jobs:
           scene.render.engine='BLENDER_EEVEE'
           scene.render.resolution_x=216; scene.render.resolution_y=384; scene.render.resolution_percentage=100
           scene.render.fps=30; scene.render.fps_base=1.0
-          scene.frame_start=1; scene.frame_end=93
+          scene.frame_start=1; scene.frame_end=93; scene.frame_step=2
           scene.view_settings.look='AgX - Medium High Contrast'
           if scene.world is None: scene.world=bpy.data.worlds.new('World')
           scene.world.color=(.035,.035,.035)
@@ -264,8 +264,8 @@ jobs:
           print('RUTAVIVA_STEP_TOUCH_FRAMES=PASS')
           PY
           "$BLENDER_BIN" -b --python /tmp/build_step_touch.py
-          ffmpeg -y -framerate 30 -start_number 1 -i /tmp/rutaviva_frames/frame_%04d.jpg \
-            -vf scale=432:768:flags=lanczos -c:v libx264 -pix_fmt yuv420p -crf 20 -preset medium -movflags +faststart \
+          ffmpeg -y -framerate 15 -pattern_type glob -i '/tmp/rutaviva_frames/frame_*.jpg' \
+            -vf 'scale=432:768:flags=lanczos,fps=30' -c:v libx264 -pix_fmt yuv420p -crf 20 -preset medium -movflags +faststart \
             /tmp/rutaviva_output/rutaviva_step_touch_pilot.mp4
           test "$(stat -c%s /tmp/rutaviva_output/rutaviva_step_touch_pilot.mp4)" -gt 10000
           echo "RUTAVIVA_STEP_TOUCH_RENDER=PASS"
