@@ -183,18 +183,24 @@ jobs:
               b.rotation_mode = 'XYZ'
 
           # One seamless 4-beat Step Touch cycle. 78 BPM ~= 23.08 frames/beat at 30 fps.
-          # Frames: 1 neutral, 24 step R, 47 touch L, 70 step L, 93 neutral/touch R.
+          # The half-beat keys visibly lift the travelling/closing foot. At each
+          # touch both thighs lean in the same lateral direction so the closing
+          # foot arrives beside the supporting foot instead of remaining wide.
           poses = [
-              # frame, root_x, bob, L_thigh_z, R_thigh_z, kneeL, kneeR, armSwing
-              (1,   0.00, 0.000, -2.5,  2.5,  2.0,  2.0,  0.0),
-              (24,  0.105,-0.012, -1.5, 11.0,  5.0,  7.0,  8.0),
-              (47,  0.075,-0.020,  5.5,  2.5, 11.0,  5.0, -5.0),
-              (70, -0.105,-0.012,-11.0,  1.5,  7.0,  5.0, -8.0),
-              (93,  0.00, 0.000, -2.5,  2.5,  2.0,  2.0,  0.0),
+              # frame, root_x, bob, L_thigh_z, R_thigh_z, kneeL, kneeR, armSwing, footL, footR
+              (1,  -0.075,-0.010, -8.0, -9.0,  5.0,  8.0, -4.0,  0.0,  1.0), # R touch / loop
+              (12,  0.000, 0.010, -2.0,  5.0,  4.0, 18.0,  2.0,  0.0,-10.0), # lift R
+              (24,  0.110,-0.014,  1.0, 13.0,  5.0,  7.0,  8.0,  0.0,  1.0), # step R
+              (35,  0.095, 0.008,  6.0, 10.0, 18.0,  5.0,  1.0,-10.0,  0.0), # lift L close
+              (47,  0.080,-0.018, 10.0,  9.0,  8.0,  5.0, -5.0,  1.0,  0.0), # L touch
+              (58,  0.000, 0.010, -5.0,  2.0, 18.0,  4.0, -2.0,-10.0,  0.0), # lift L
+              (70, -0.110,-0.014,-13.0, -1.0,  7.0,  5.0, -8.0,  1.0,  0.0), # step L
+              (81, -0.095, 0.008,-10.0, -6.0,  5.0, 18.0, -1.0,  0.0,-10.0), # lift R close
+              (93, -0.075,-0.010, -8.0, -9.0,  5.0,  8.0, -4.0,  0.0,  1.0), # R touch / loop
           ]
 
           base_rig_loc = rig.location.copy()
-          for frame, sx, bob, ltz, rtz, kl, kr, swing in poses:
+          for frame, sx, bob, ltz, rtz, kl, kr, swing, foot_l, foot_r in poses:
               rig.location = base_rig_loc + Vector((sx,0,bob))
               rig.keyframe_insert(data_path='location', frame=frame)
 
@@ -207,9 +213,9 @@ jobs:
               if bones['sR']:
                   bones['sR'].rotation_euler = (math.radians(kr),0,0); bones['sR'].keyframe_insert('rotation_euler',frame=frame)
               if bones['fL']:
-                  bones['fL'].rotation_euler = (math.radians(-2 if frame in (24,70) else 1),0,0); bones['fL'].keyframe_insert('rotation_euler',frame=frame)
+                  bones['fL'].rotation_euler = (math.radians(foot_l),0,0); bones['fL'].keyframe_insert('rotation_euler',frame=frame)
               if bones['fR']:
-                  bones['fR'].rotation_euler = (math.radians(1 if frame in (24,70) else -2),0,0); bones['fR'].keyframe_insert('rotation_euler',frame=frame)
+                  bones['fR'].rotation_euler = (math.radians(foot_r),0,0); bones['fR'].keyframe_insert('rotation_euler',frame=frame)
 
               # Relaxed opposing arm swing; arms remain down, not a T-pose.
               if bones['uL']:
