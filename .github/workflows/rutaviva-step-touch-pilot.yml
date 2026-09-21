@@ -95,14 +95,14 @@ jobs:
                   return None
               return HumanService.add_mhclo_asset(p, human, asset_type=atype, material_type=mat, subdiv_levels=subdiv)
 
-          eyes = asset('high-poly.mhclo','eyes','Eyes','PROCEDURAL_EYES',,0)
-          brows = asset('eyebrow002.mhclo','eyebrows','Eyebrows','MAKESKIN',,0)
-          lashes = asset('eyelashes01.mhclo','eyelashes','Eyelashes','MAKESKIN',,0)
-          hair = asset('short04.mhclo','hair','Hair','MAKESKIN',,0)
-          beard = asset('wdg_scruffy_beard.mhclo','clothes','Clothes','MAKESKIN',,0)
-          shirt = asset('elvs_crude_t-shirt_male.mhclo','clothes','Clothes','MAKESKIN',,0)
-          shorts = asset('cortu_jeans_shorts.mhclo','clothes','Clothes','MAKESKIN',,0)
-          shoes = asset('shoes02.mhclo','clothes','Clothes','MAKESKIN',,0)
+          eyes = asset('high-poly.mhclo','eyes','Eyes','PROCEDURAL_EYES',0)
+          brows = asset('eyebrow002.mhclo','eyebrows','Eyebrows','MAKESKIN',0)
+          lashes = asset('eyelashes01.mhclo','eyelashes','Eyelashes','MAKESKIN',0)
+          hair = asset('short04.mhclo','hair','Hair','MAKESKIN',0)
+          beard = asset('wdg_scruffy_beard.mhclo','clothes','Clothes','MAKESKIN',0)
+          shirt = asset('elvs_crude_t-shirt_male.mhclo','clothes','Clothes','MAKESKIN',0)
+          shorts = asset('cortu_jeans_shorts.mhclo','clothes','Clothes','MAKESKIN',0)
+          shoes = asset('shoes02.mhclo','clothes','Clothes','MAKESKIN',0)
 
           def solid(obj, name, color, rough=.6):
               if not obj: return
