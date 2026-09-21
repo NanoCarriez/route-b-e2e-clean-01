@@ -1,0 +1,202 @@
+name: RutaViva Step Touch Cloud Pilot
+
+on:
+  push:
+    branches: [rutaviva-step-touch-pilot-20260921]
+    paths: [.github/workflows/rutaviva-step-touch-cloud-pilot.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  step-touch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install runtime
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libegl1 libgl1 libxkbcommon0 ffmpeg
+          cd /tmp
+          curl -fL --retry 3 -o blender.tar.xz https://download.blender.org/release/Blender5.2/blender-5.2.2-linux-x64.tar.xz
+          curl -fL --retry 3 -o blender.sha256 https://download.blender.org/release/Blender5.2/blender-5.2.2.sha256
+          grep 'blender-5.2.2-linux-x64.tar.xz' blender.sha256 | sed 's#blender-5.2.2-linux-x64.tar.xz#blender.tar.xz#' | sha256sum -c -
+          tar -xf blender.tar.xz
+          echo "BLENDER_BIN=/tmp/blender-5.2.2-linux-x64/blender" >> "$GITHUB_ENV"
+      - name: Install MPFB
+        run: |
+          "$BLENDER_BIN" --online-mode --command extension install -s -e mpfb
+      - name: Download CC0 assets
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/rutaviva_assets
+          curl -fL --retry 3 -o /tmp/rutaviva_assets/system.zip https://files2.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip
+          curl -fL --retry 3 -o /tmp/rutaviva_assets/shirts.zip https://files2.makehumancommunity.org/asset_packs/shirts01/shirts01_cc0.zip
+          curl -fL --retry 3 -o /tmp/rutaviva_assets/pants.zip https://files2.makehumancommunity.org/asset_packs/pants01/pants01_cc0.zip
+          curl -fL --retry 3 -o /tmp/rutaviva_assets/beards.zip https://files2.makehumancommunity.org/asset_packs/bodyparts05/bodyparts05_cc0.zip
+      - name: Build and render Step Touch
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/rutaviva_output/frames
+          cat > /tmp/build_step_touch.py <<'PY'
+          import bpy, os, sys, importlib, math
+          from mathutils import Vector
+
+          def dyn(suffix,key):
+              for m in list(sys.modules):
+                  if m.endswith(suffix):
+                      mod=importlib.import_module(m)
+                      if hasattr(mod,key): return getattr(mod,key)
+              raise RuntimeError(key)
+
+          HumanService=dyn('mpfb.services.humanservice','HumanService')
+          TargetService=dyn('mpfb.services.targetservice','TargetService')
+          AssetService=dyn('mpfb.services.assetservice','AssetService')
+          LocationService=dyn('mpfb.services.locationservice','LocationService')
+
+          root=LocationService.get_user_data(); os.makedirs(root,exist_ok=True)
+          for z in ['/tmp/rutaviva_assets/system.zip','/tmp/rutaviva_assets/shirts.zip','/tmp/rutaviva_assets/pants.zip','/tmp/rutaviva_assets/beards.zip']:
+              e=AssetService.fix_and_extract_asset_pack_zip(z,root)
+              if e: raise RuntimeError(e)
+          AssetService.rescan_pack_metadata()
+
+          macro=TargetService.get_default_macro_info_dict()
+          macro.update({'gender':1.0,'age':0.34,'muscle':0.60,'weight':0.47,'height':0.55,'proportions':0.58})
+          macro['race']={'asian':0.05,'caucasian':0.82,'african':0.13}
+          human=HumanService.create_human(scale=0.1,feet_on_ground=True,macro_detail_dict=macro)
+          human.name='RutaViva_Man_StepTouch'
+          skin=AssetService.find_asset_absolute_path('young_caucasian_male2.mhmat',asset_subdir='skins') or AssetService.find_asset_absolute_path('young_caucasian_male.mhmat',asset_subdir='skins')
+          HumanService.set_character_skin(skin,human,skin_type='ENHANCED_SSS')
+          rig=HumanService.add_builtin_rig(human,'default')
+          print('BONES=' + ','.join(b.name for b in rig.pose.bones))
+
+          def asset(name,subdir,atype='Clothes',mat='MAKESKIN',subdiv=1):
+              p=AssetService.find_asset_absolute_path(name,asset_subdir=subdir)
+              print(f'ASSET {name}={p}')
+              if not p: return None
+              return HumanService.add_mhclo_asset(p,human,asset_type=atype,material_type=mat,subdiv_levels=subdiv)
+
+          eyes=asset('high-poly.mhclo','eyes','Eyes','PROCEDURAL_EYES',1)
+          brows=asset('eyebrow002.mhclo','eyebrows','Eyebrows','MAKESKIN',1)
+          lashes=asset('eyelashes01.mhclo','eyelashes','Eyelashes','MAKESKIN',1)
+          hair=asset('short04.mhclo','hair','Hair','MAKESKIN',1)
+          beard=asset('wdg_scruffy_beard.mhclo','clothes','Clothes','MAKESKIN',1)
+          shirt=asset('elvs_crude_t-shirt_male.mhclo','clothes','Clothes','MAKESKIN',1)
+          shorts=asset('cortu_jeans_shorts.mhclo','clothes','Clothes','MAKESKIN',1)
+          shoes=asset('shoes02.mhclo','clothes','Clothes','MAKESKIN',1)
+
+          def solid(obj,name,color,rough=.6):
+              if not obj:return
+              m=bpy.data.materials.new(name);m.use_nodes=True
+              p=m.node_tree.nodes.get('Principled BSDF')
+              p.inputs['Base Color'].default_value=color;p.inputs['Roughness'].default_value=rough
+              obj.data.materials.clear();obj.data.materials.append(m)
+          solid(shirt,'RutaViva Slate Blue',(0.16,0.28,0.35,1),.68)
+          solid(shorts,'RutaViva Black Shorts',(0.018,0.022,0.026,1),.76)
+          solid(shoes,'RutaViva Dark Shoes',(0.012,0.014,0.018,1),.55)
+
+          def darken(obj,tint=(0.045,0.026,0.018,1)):
+              if not obj:return
+              for slot in obj.material_slots:
+                  m=slot.material
+                  if not m or not m.use_nodes:continue
+                  for p in [n for n in m.node_tree.nodes if n.type=='BSDF_PRINCIPLED']:
+                      bc=p.inputs.get('Base Color')
+                      if bc and not bc.is_linked: bc.default_value=tint
+          for o in [hair,beard,brows]: darken(o)
+
+          # Correctly parent a simple black smartwatch to the left wrist.
+          wb=rig.pose.bones.get('wrist.L')
+          if wb:
+              bpy.ops.mesh.primitive_cube_add(size=1,location=(0,0,0))
+              watch=bpy.context.object; watch.name='RutaViva_Black_Smartwatch'; watch.scale=(0.032,0.018,0.042)
+              wm=bpy.data.materials.new('Watch Black'); wm.diffuse_color=(0.005,0.006,0.008,1); watch.data.materials.append(wm)
+              watch.parent=rig; watch.parent_type='BONE'; watch.parent_bone='wrist.L'; watch.location=(0,0,0)
+
+          # Step Touch authority: 78 BPM, 30 fps. One complete 4-beat cycle = 92 rendered frames.
+          # Key poses: L step -> R touch -> R step -> L touch -> next L step.
+          beat_frames=[1,24,47,70,93]
+          required=['thigh.L','thigh.R','upperarm01.L','upperarm01.R']
+          missing=[n for n in required if rig.pose.bones.get(n) is None]
+          if missing: raise RuntimeError('Missing required bones: '+','.join(missing))
+
+          optional_names=['lowerarm01.L','lowerarm01.R','calf.L','calf.R','shin.L','shin.R','spine01','pelvis']
+          print('OPTIONAL_PRESENT='+','.join(n for n in optional_names if rig.pose.bones.get(n)))
+
+          def setrot(name,x=0,y=0,z=0):
+              b=rig.pose.bones.get(name)
+              if b:
+                  b.rotation_mode='XYZ'; b.rotation_euler=(math.radians(x),math.radians(y),math.radians(z))
+                  b.keyframe_insert('rotation_euler')
+
+          def pose(frame, lth, rth, larm, rarm, lknee=0, rknee=0, spine=0):
+              bpy.context.scene.frame_set(frame)
+              # thighs use the same Z ab/adduction axis proven by the static gate
+              setrot('thigh.L',0,0,lth); setrot('thigh.R',0,0,rth)
+              setrot('upperarm01.L',0,0,larm); setrot('upperarm01.R',0,0,rarm)
+              setrot('lowerarm01.L',-7,1,-3); setrot('lowerarm01.R',7,-1,3)
+              # use whichever lower-leg naming exists; small flex only
+              for nm,ang in [('calf.L',lknee),('shin.L',lknee),('calf.R',rknee),('shin.R',rknee)]:
+                  if rig.pose.bones.get(nm): setrot(nm,ang,0,0)
+              if rig.pose.bones.get('spine01'): setrot('spine01',0,0,spine)
+
+          pose(1,  -14,  3, -34, 34, 4, 2,  2.0)   # step left
+          pose(24, -7,  -8, -39, 29, 3, 7,  1.0)   # right touch beside left
+          pose(47, -3,  14, -29, 39, 2, 4, -2.0)   # step right
+          pose(70,  8,   7, -34, 34, 7, 3, -1.0)   # left touch beside right
+          pose(93, -14,  3, -34, 34, 4, 2,  2.0)   # loop closure
+
+          # Smooth human interpolation without overshoot.
+          if rig.animation_data and rig.animation_data.action:
+              for fc in rig.animation_data.action.fcurves:
+                  for kp in fc.keyframe_points:
+                      kp.interpolation='BEZIER'; kp.handle_left_type='AUTO_CLAMPED'; kp.handle_right_type='AUTO_CLAMPED'
+
+          bpy.context.scene.frame_set(1); bpy.context.view_layer.update()
+          # Full character bounds at pilot pose.
+          pts=[]
+          for o in bpy.context.scene.objects:
+              if o.type=='MESH' and (o==human or o.parent==rig or o.name.startswith('RutaViva')):
+                  pts += [o.matrix_world @ Vector(c) for c in o.bound_box]
+          xmin,xmax=min(v.x for v in pts),max(v.x for v in pts); ymin,ymax=min(v.y for v in pts),max(v.y for v in pts); zmin,zmax=min(v.z for v in pts),max(v.z for v in pts)
+          h=zmax-zmin; c=Vector(((xmin+xmax)/2,(ymin+ymax)/2,(zmin+zmax)/2))
+
+          # RutaViva minimal indoor context.
+          bpy.ops.mesh.primitive_plane_add(size=8,location=(c.x,c.y,zmin-.006)); floor=bpy.context.object
+          fm=bpy.data.materials.new('Warm Oak Neutral'); fm.diffuse_color=(0.46,0.40,0.33,1); fm.roughness=.72; floor.data.materials.append(fm)
+          bpy.ops.mesh.primitive_plane_add(size=8,location=(c.x,c.y+1.35,c.z+.35),rotation=(math.radians(90),0,0)); wall=bpy.context.object
+          mm=bpy.data.materials.new('Warm Gray Wall'); mm.diffuse_color=(0.69,0.68,0.66,1); mm.roughness=.88; wall.data.materials.append(mm)
+
+          for loc,e,size,name in [((-2.4,-3.0,4.0),950,3.0,'Key'),((2.3,-2.1,2.8),500,2.5,'Fill'),((0.8,1.0,3.8),650,2.0,'Rim')]:
+              bpy.ops.object.light_add(type='AREA',location=loc); l=bpy.context.object; l.name=name; l.data.energy=e; l.data.size=size; l.rotation_euler=(c-l.location).to_track_quat('-Z','Y').to_euler()
+
+          scene=bpy.context.scene; scene.render.engine='BLENDER_EEVEE'; scene.render.resolution_x=432; scene.render.resolution_y=768; scene.render.resolution_percentage=100
+          scene.render.image_settings.file_format='PNG'; scene.render.fps=30; scene.render.fps_base=1.0; scene.frame_start=1; scene.frame_end=92
+          scene.view_settings.look='AgX - Medium High Contrast'
+          if scene.world is None: scene.world=bpy.data.worlds.new('World')
+          scene.world.color=(.035,.035,.035)
+
+          bpy.ops.object.camera_add(location=(c.x,c.y-4.25,c.z)); cam=bpy.context.object; cam.data.type='ORTHO'; cam.data.ortho_scale=h*1.16; cam.rotation_euler=(c-cam.location).to_track_quat('-Z','Y').to_euler(); scene.camera=cam
+          scene.render.filepath='/tmp/rutaviva_output/frames/frame_'
+          bpy.ops.render.render(animation=True)
+          bpy.ops.wm.save_as_mainfile(filepath='/tmp/rutaviva_output/rutaviva_step_touch_78bpm_pilot.blend')
+          print('STEP_TOUCH_RENDER_FRAMES=92')
+          print('STEP_TOUCH_BPM_TARGET=78')
+          print('RUTAVIVA_STEP_TOUCH_RENDER=PASS')
+          PY
+          "$BLENDER_BIN" -b --python /tmp/build_step_touch.py
+          ffmpeg -y -framerate 30 -i /tmp/rutaviva_output/frames/frame_%04d.png -c:v libx264 -profile:v high -pix_fmt yuv420p -crf 18 -movflags +faststart -an /tmp/rutaviva_output/RutaViva_StepTouch_CloudPilot_78BPM.mp4
+          ffmpeg -y -i /tmp/rutaviva_output/RutaViva_StepTouch_CloudPilot_78BPM.mp4 -vf "select='eq(n,0)+eq(n,23)+eq(n,46)+eq(n,69)',scale=216:384,tile=4x1" -frames:v 1 /tmp/rutaviva_output/RutaViva_StepTouch_contact.jpg
+          ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate,pix_fmt -show_entries format=duration,size -of default=nw=1 /tmp/rutaviva_output/RutaViva_StepTouch_CloudPilot_78BPM.mp4
+          sha256sum /tmp/rutaviva_output/RutaViva_StepTouch_CloudPilot_78BPM.mp4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rutaviva-step-touch-cloud-pilot-78bpm
+          path: |
+            /tmp/rutaviva_output/RutaViva_StepTouch_CloudPilot_78BPM.mp4
+            /tmp/rutaviva_output/RutaViva_StepTouch_contact.jpg
+            /tmp/rutaviva_output/rutaviva_step_touch_78bpm_pilot.blend
+          if-no-files-found: error
+          retention-days: 7
