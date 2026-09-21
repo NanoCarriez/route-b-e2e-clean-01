@@ -48,6 +48,9 @@ jobs:
           import bpy, os, sys, importlib, math
           from mathutils import Vector
 
+          # Blender 5.x: set interpolation globally before keyframe creation.
+          bpy.context.preferences.edit.keyframe_new_interpolation_type = 'BEZIER'
+
           def dyn(suffix, key):
               for modname in list(sys.modules):
                   if modname.endswith(suffix):
@@ -155,8 +158,8 @@ jobs:
               'uR': first_bone('upperarm01.R','upperarm.R'),
               'lL': first_bone('lowerarm01.L','lowerarm.L','forearm.L'),
               'lR': first_bone('lowerarm01.R','lowerarm.R','forearm.R'),
-              'tL': first_bone('thigh.L','thigh01.L','upperleg.L'),
-              'tR': first_bone('thigh.R','thigh01.R','upperleg.R'),
+              'tL': first_bone('upperleg01.L','thigh.L','thigh01.L','upperleg.L'),
+              'tR': first_bone('upperleg01.R','thigh.R','thigh01.R','upperleg.R'),
               'sL': first_bone('shin.L','lowerleg01.L','lowerleg.L','calf.L'),
               'sR': first_bone('shin.R','lowerleg01.R','lowerleg.R','calf.R'),
               'fL': first_bone('foot.L','foot01.L'),
@@ -205,12 +208,6 @@ jobs:
                   bones['lL'].rotation_euler = (math.radians(-7),math.radians(2),math.radians(-3)); bones['lL'].keyframe_insert('rotation_euler',frame=frame)
               if bones['lR']:
                   bones['lR'].rotation_euler = (math.radians(7),math.radians(-2),math.radians(3)); bones['lR'].keyframe_insert('rotation_euler',frame=frame)
-
-          if rig.animation_data and rig.animation_data.action:
-              for fc in rig.animation_data.action.fcurves:
-                  for kp in fc.keyframe_points:
-                      kp.interpolation='BEZIER'
-                      kp.handle_left_type='AUTO_CLAMPED'; kp.handle_right_type='AUTO_CLAMPED'
 
           bpy.context.scene.frame_set(1)
           bpy.context.view_layer.update()
