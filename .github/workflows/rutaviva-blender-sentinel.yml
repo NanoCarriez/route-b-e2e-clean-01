@@ -76,13 +76,14 @@ jobs:
           cam.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
 
           scene = bpy.context.scene
+          scene.world = bpy.data.worlds.new('SentinelWorld')
+          scene.world.color = (0.06, 0.06, 0.06)
           scene.render.engine = 'BLENDER_EEVEE'
           scene.render.resolution_x = 256
           scene.render.resolution_y = 256
           scene.render.resolution_percentage = 100
           scene.render.image_settings.file_format = 'PNG'
           scene.render.filepath = '/tmp/rutaviva_blender_sentinel.png'
-          scene.world.color = (0.06, 0.06, 0.06)
           bpy.ops.render.render(write_still=True)
 
           path = scene.render.filepath
