@@ -88,21 +88,21 @@ jobs:
           rig.name = 'RutaViva_Rig'
           print('BONES=' + ','.join(b.name for b in rig.pose.bones))
 
-          def asset(name, subdir, atype='Clothes', mat='MAKESKIN', subdiv=1):
+          def asset(name, subdir, atype='Clothes', mat='MAKESKIN', subdiv=0):
               p = AssetService.find_asset_absolute_path(name, asset_subdir=subdir)
               print(f'ASSET {name}={p}')
               if not p:
                   return None
               return HumanService.add_mhclo_asset(p, human, asset_type=atype, material_type=mat, subdiv_levels=subdiv)
 
-          eyes = asset('high-poly.mhclo','eyes','Eyes','PROCEDURAL_EYES',1)
-          brows = asset('eyebrow002.mhclo','eyebrows','Eyebrows','MAKESKIN',1)
-          lashes = asset('eyelashes01.mhclo','eyelashes','Eyelashes','MAKESKIN',1)
-          hair = asset('short04.mhclo','hair','Hair','MAKESKIN',1)
-          beard = asset('wdg_scruffy_beard.mhclo','clothes','Clothes','MAKESKIN',1)
-          shirt = asset('elvs_crude_t-shirt_male.mhclo','clothes','Clothes','MAKESKIN',1)
-          shorts = asset('cortu_jeans_shorts.mhclo','clothes','Clothes','MAKESKIN',1)
-          shoes = asset('shoes02.mhclo','clothes','Clothes','MAKESKIN',1)
+          eyes = asset('high-poly.mhclo','eyes','Eyes','PROCEDURAL_EYES',,0)
+          brows = asset('eyebrow002.mhclo','eyebrows','Eyebrows','MAKESKIN',,0)
+          lashes = asset('eyelashes01.mhclo','eyelashes','Eyelashes','MAKESKIN',,0)
+          hair = asset('short04.mhclo','hair','Hair','MAKESKIN',,0)
+          beard = asset('wdg_scruffy_beard.mhclo','clothes','Clothes','MAKESKIN',,0)
+          shirt = asset('elvs_crude_t-shirt_male.mhclo','clothes','Clothes','MAKESKIN',,0)
+          shorts = asset('cortu_jeans_shorts.mhclo','clothes','Clothes','MAKESKIN',,0)
+          shoes = asset('shoes02.mhclo','clothes','Clothes','MAKESKIN',,0)
 
           def solid(obj, name, color, rough=.6):
               if not obj: return
@@ -113,9 +113,16 @@ jobs:
               p.inputs['Roughness'].default_value = rough
               obj.data.materials.clear(); obj.data.materials.append(m)
 
+          # Stage A gate: simple materials and zero asset subdivision keep EEVEE
+          # fast enough for motion QA while preserving the canonical silhouette.
+          solid(human,'RutaViva Skin Gate',(0.48,0.27,0.16,1),.64)
           solid(shirt,'RutaViva Slate Blue',(0.16,0.28,0.35,1),.68)
           solid(shorts,'RutaViva Black Shorts',(0.018,0.022,0.026,1),.76)
           solid(shoes,'RutaViva Dark Shoes',(0.012,0.014,0.018,1),.55)
+          solid(hair,'RutaViva Dark Hair',(0.018,0.012,0.010,1),.72)
+          solid(beard,'RutaViva Dark Beard',(0.018,0.012,0.010,1),.78)
+          solid(brows,'RutaViva Dark Brows',(0.018,0.012,0.010,1),.78)
+          solid(lashes,'RutaViva Dark Lashes',(0.010,0.008,0.007,1),.78)
 
           def darken_textured(obj, tint=(0.055,0.032,0.022,1)):
               if not obj: return
@@ -233,7 +240,7 @@ jobs:
 
           scene=bpy.context.scene
           scene.render.engine='BLENDER_EEVEE'
-          scene.render.resolution_x=432; scene.render.resolution_y=768; scene.render.resolution_percentage=100
+          scene.render.resolution_x=216; scene.render.resolution_y=384; scene.render.resolution_percentage=100
           scene.render.fps=30; scene.render.fps_base=1.0
           scene.frame_start=1; scene.frame_end=93
           scene.view_settings.look='AgX - Medium High Contrast'
@@ -246,8 +253,9 @@ jobs:
           # Official Blender 5.2.2 Linux build lacks FFMPEG output; render PNGs,
           # then encode H.264 with the runner's ffmpeg.
           os.makedirs('/tmp/rutaviva_frames', exist_ok=True)
-          scene.render.image_settings.file_format='PNG'
+          scene.render.image_settings.file_format='JPEG'
           scene.render.image_settings.color_mode='RGB'
+          scene.render.image_settings.quality=88
           scene.render.filepath='/tmp/rutaviva_frames/frame_'
 
           bpy.ops.wm.save_as_mainfile(filepath='/tmp/rutaviva_output/rutaviva_step_touch_pilot.blend')
@@ -255,8 +263,8 @@ jobs:
           print('RUTAVIVA_STEP_TOUCH_FRAMES=PASS')
           PY
           "$BLENDER_BIN" -b --python /tmp/build_step_touch.py
-          ffmpeg -y -framerate 30 -start_number 1 -i /tmp/rutaviva_frames/frame_%04d.png \
-            -c:v libx264 -pix_fmt yuv420p -crf 20 -preset medium -movflags +faststart \
+          ffmpeg -y -framerate 30 -start_number 1 -i /tmp/rutaviva_frames/frame_%04d.jpg \
+            -vf scale=432:768:flags=lanczos -c:v libx264 -pix_fmt yuv420p -crf 20 -preset medium -movflags +faststart \
             /tmp/rutaviva_output/rutaviva_step_touch_pilot.mp4
           test "$(stat -c%s /tmp/rutaviva_output/rutaviva_step_touch_pilot.mp4)" -gt 10000
           echo "RUTAVIVA_STEP_TOUCH_RENDER=PASS"
