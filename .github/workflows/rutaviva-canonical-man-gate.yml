@@ -2,10 +2,8 @@ name: RutaViva Canonical Man Visual Gate
 
 on:
   push:
-    branches:
-      - rutaviva-blender-sentinel-20260921
-    paths:
-      - .github/workflows/rutaviva-canonical-man-gate.yml
+    branches: [rutaviva-blender-sentinel-20260921]
+    paths: [.github/workflows/rutaviva-canonical-man-gate.yml]
 
 permissions:
   contents: read
@@ -15,223 +13,162 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Checkout isolated branch
-        uses: actions/checkout@v4
-
-      - name: Install headless runtime
-        shell: bash
+      - uses: actions/checkout@v4
+      - name: Install runtime
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y -qq libegl1 libgl1 libxkbcommon0
-
-      - name: Download Blender 5.2.2
-        shell: bash
-        run: |
-          set -euo pipefail
           cd /tmp
-          curl -fL --retry 3 --retry-delay 2 -o blender.tar.xz https://download.blender.org/release/Blender5.2/blender-5.2.2-linux-x64.tar.xz
-          curl -fL --retry 3 --retry-delay 2 -o blender.sha256 https://download.blender.org/release/Blender5.2/blender-5.2.2.sha256
+          curl -fL --retry 3 -o blender.tar.xz https://download.blender.org/release/Blender5.2/blender-5.2.2-linux-x64.tar.xz
+          curl -fL --retry 3 -o blender.sha256 https://download.blender.org/release/Blender5.2/blender-5.2.2.sha256
           grep 'blender-5.2.2-linux-x64.tar.xz' blender.sha256 | sed 's#blender-5.2.2-linux-x64.tar.xz#blender.tar.xz#' | sha256sum -c -
           tar -xf blender.tar.xz
           echo "BLENDER_BIN=/tmp/blender-5.2.2-linux-x64/blender" >> "$GITHUB_ENV"
-
-      - name: Install MPFB 2.0.17
-        shell: bash
+      - name: Install MPFB
         run: |
-          set -euo pipefail
           "$BLENDER_BIN" --online-mode --command extension install -s -e mpfb
-          "$BLENDER_BIN" --command extension list | grep -i mpfb
-
-      - name: Download CC0 MakeHuman asset packs
-        shell: bash
+      - name: Download CC0 assets
         run: |
           set -euo pipefail
           mkdir -p /tmp/rutaviva_assets
-          curl -fL --retry 3 --retry-delay 3 -o /tmp/rutaviva_assets/system.zip https://files2.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip
-          curl -fL --retry 3 --retry-delay 3 -o /tmp/rutaviva_assets/shirts.zip https://files2.makehumancommunity.org/asset_packs/shirts01/shirts01_cc0.zip
-          curl -fL --retry 3 --retry-delay 3 -o /tmp/rutaviva_assets/pants.zip https://files2.makehumancommunity.org/asset_packs/pants01/pants01_cc0.zip
-          curl -fL --retry 3 --retry-delay 3 -o /tmp/rutaviva_assets/beards.zip https://files2.makehumancommunity.org/asset_packs/bodyparts05/bodyparts05_cc0.zip
-          ls -lh /tmp/rutaviva_assets
-
-      - name: Build and render RutaViva canonical man candidate
-        shell: bash
+          curl -fL --retry 3 -o /tmp/rutaviva_assets/system.zip https://files2.makehumancommunity.org/asset_packs/makehuman_system_assets/makehuman_system_assets_cc0.zip
+          curl -fL --retry 3 -o /tmp/rutaviva_assets/shirts.zip https://files2.makehumancommunity.org/asset_packs/shirts01/shirts01_cc0.zip
+          curl -fL --retry 3 -o /tmp/rutaviva_assets/pants.zip https://files2.makehumancommunity.org/asset_packs/pants01/pants01_cc0.zip
+          curl -fL --retry 3 -o /tmp/rutaviva_assets/beards.zip https://files2.makehumancommunity.org/asset_packs/bodyparts05/bodyparts05_cc0.zip
+      - name: Render candidate v2
         run: |
           set -euo pipefail
           mkdir -p /tmp/rutaviva_output
-          cat > /tmp/rutaviva_canonical_man.py <<'PY'
+          cat > /tmp/build.py <<'PY'
           import bpy, os, sys, importlib, math
           from mathutils import Vector
 
-          def dynamic_import(suffix, key):
-              for modname in list(sys.modules):
-                  if modname.endswith(suffix):
-                      mod = importlib.import_module(modname)
-                      if hasattr(mod, key):
-                          return getattr(mod, key)
-              raise RuntimeError(f'Could not import {key} from *{suffix}')
+          def dyn(suffix,key):
+              for m in list(sys.modules):
+                  if m.endswith(suffix):
+                      mod=importlib.import_module(m)
+                      if hasattr(mod,key): return getattr(mod,key)
+              raise RuntimeError(key)
+          HumanService=dyn('mpfb.services.humanservice','HumanService')
+          TargetService=dyn('mpfb.services.targetservice','TargetService')
+          AssetService=dyn('mpfb.services.assetservice','AssetService')
+          LocationService=dyn('mpfb.services.locationservice','LocationService')
 
-          HumanService = dynamic_import('mpfb.services.humanservice', 'HumanService')
-          TargetService = dynamic_import('mpfb.services.targetservice', 'TargetService')
-          AssetService = dynamic_import('mpfb.services.assetservice', 'AssetService')
-          LocationService = dynamic_import('mpfb.services.locationservice', 'LocationService')
-
-          user_data = LocationService.get_user_data()
-          os.makedirs(user_data, exist_ok=True)
-          for zip_path in [
-              '/tmp/rutaviva_assets/system.zip',
-              '/tmp/rutaviva_assets/shirts.zip',
-              '/tmp/rutaviva_assets/pants.zip',
-              '/tmp/rutaviva_assets/beards.zip']:
-              err = AssetService.fix_and_extract_asset_pack_zip(zip_path, user_data)
-              if err:
-                  raise RuntimeError(f'Asset pack install failed {zip_path}: {err}')
+          root=LocationService.get_user_data(); os.makedirs(root,exist_ok=True)
+          for z in ['/tmp/rutaviva_assets/system.zip','/tmp/rutaviva_assets/shirts.zip','/tmp/rutaviva_assets/pants.zip','/tmp/rutaviva_assets/beards.zip']:
+              e=AssetService.fix_and_extract_asset_pack_zip(z,root)
+              if e: raise RuntimeError(e)
           AssetService.rescan_pack_metadata()
-          print('PACKS=' + repr(AssetService.get_pack_names()))
 
-          macro = TargetService.get_default_macro_info_dict()
-          macro['gender'] = 1.0
-          macro['age'] = 0.38
-          macro['muscle'] = 0.64
-          macro['weight'] = 0.48
-          macro['height'] = 0.57
-          macro['proportions'] = 0.60
-          macro['race'] = {'asian': 0.05, 'caucasian': 0.85, 'african': 0.10}
+          macro=TargetService.get_default_macro_info_dict()
+          macro.update({'gender':1.0,'age':0.34,'muscle':0.60,'weight':0.47,'height':0.55,'proportions':0.58})
+          macro['race']={'asian':0.05,'caucasian':0.82,'african':0.13}
+          human=HumanService.create_human(scale=0.1,feet_on_ground=True,macro_detail_dict=macro)
+          human.name='RutaViva_Man_v2'
+          skin=AssetService.find_asset_absolute_path('young_caucasian_male2.mhmat',asset_subdir='skins') or AssetService.find_asset_absolute_path('young_caucasian_male.mhmat',asset_subdir='skins')
+          HumanService.set_character_skin(skin,human,skin_type='ENHANCED_SSS')
+          rig=HumanService.add_builtin_rig(human,'default')
+          print('BONES=' + ','.join(b.name for b in rig.pose.bones))
 
-          human = HumanService.create_human(scale=0.1, feet_on_ground=True, macro_detail_dict=macro)
-          human.name = 'RutaViva_Man_Candidate'
+          def asset(name,subdir,atype='Clothes',mat='MAKESKIN',subdiv=1):
+              p=AssetService.find_asset_absolute_path(name,asset_subdir=subdir)
+              print(f'ASSET {name}={p}')
+              if not p: return None
+              return HumanService.add_mhclo_asset(p,human,asset_type=atype,material_type=mat,subdiv_levels=subdiv)
 
-          skin_path = AssetService.find_asset_absolute_path('young_caucasian_male.mhmat', asset_subdir='skins')
-          if not skin_path:
-              raise RuntimeError('young_caucasian_male skin not found')
-          HumanService.set_character_skin(skin_path, human, skin_type='GAMEENGINE')
+          eyes=asset('high-poly.mhclo','eyes','Eyes','PROCEDURAL_EYES',1)
+          brows=asset('eyebrow002.mhclo','eyebrows','Eyebrows','MAKESKIN',1)
+          lashes=asset('eyelashes01.mhclo','eyelashes','Eyelashes','MAKESKIN',1)
+          hair=asset('short04.mhclo','hair','Hair','MAKESKIN',2)
+          beard=asset('wdg_scruffy_beard.mhclo','clothes','Clothes','MAKESKIN',2)
+          shirt=asset('elvs_crude_t-shirt_male.mhclo','clothes','Clothes','MAKESKIN',2)
+          shorts=asset('cortu_jeans_shorts.mhclo','clothes','Clothes','MAKESKIN',2)
+          shoes=asset('shoes02.mhclo','clothes','Clothes','MAKESKIN',2)
 
-          rig = HumanService.add_builtin_rig(human, 'game_engine')
-          print('RIG=' + repr(rig.name if rig else None))
+          def solid(obj,name,color,rough=.6):
+              if not obj:return
+              m=bpy.data.materials.new(name);m.use_nodes=True
+              p=m.node_tree.nodes.get('Principled BSDF')
+              p.inputs['Base Color'].default_value=color;p.inputs['Roughness'].default_value=rough
+              obj.data.materials.clear();obj.data.materials.append(m)
+          solid(shirt,'RutaViva Slate Blue',(0.16,0.28,0.35,1),.68)
+          solid(shorts,'RutaViva Black Shorts',(0.018,0.022,0.026,1),.76)
+          solid(shoes,'RutaViva Dark Shoes',(0.012,0.014,0.018,1),.55)
 
-          def find_asset(fname, subdir):
-              p = AssetService.find_asset_absolute_path(fname, asset_subdir=subdir)
-              print(f'ASSET {subdir}/{fname} => {p}')
-              return p
-
-          def add_asset(fname, subdir, atype, material_type='GAMEENGINE', subdiv=1):
-              p = find_asset(fname, subdir)
-              if not p:
-                  print(f'WARN missing {fname}')
-                  return None
-              return HumanService.add_mhclo_asset(p, human, asset_type=atype, material_type=material_type, subdiv_levels=subdiv)
-
-          eyes = add_asset('high-poly.mhclo', 'eyes', 'Eyes', 'PROCEDURAL_EYES', 1)
-          brows = add_asset('eyebrow001.mhclo', 'eyebrows', 'Eyebrows', 'GAMEENGINE', 1)
-          lashes = add_asset('eyelashes01.mhclo', 'eyelashes', 'Eyelashes', 'GAMEENGINE', 1)
-          hair = add_asset('short02.mhclo', 'hair', 'Hair', 'GAMEENGINE', 1)
-          beard = add_asset('wdg_scruffy_beard.mhclo', 'clothes', 'Clothes', 'GAMEENGINE', 1)
-          shirt = add_asset('elvs_crude_t-shirt_male.mhclo', 'clothes', 'Clothes', 'GAMEENGINE', 1)
-          shorts = add_asset('cortu_jeans_shorts.mhclo', 'clothes', 'Clothes', 'GAMEENGINE', 1)
-          shoes = add_asset('shoes02.mhclo', 'clothes', 'Clothes', 'GAMEENGINE', 1)
-
-          def solidify_material(obj, name, rgba, roughness=0.55):
-              if obj is None:
-                  return
-              mat = bpy.data.materials.new(name)
-              mat.use_nodes = True
-              bsdf = mat.node_tree.nodes.get('Principled BSDF')
-              if bsdf:
-                  bsdf.inputs['Base Color'].default_value = rgba
-                  bsdf.inputs['Roughness'].default_value = roughness
-              obj.data.materials.clear()
-              obj.data.materials.append(mat)
-
-          solidify_material(shirt, 'RutaViva Slate Blue Shirt', (0.20, 0.30, 0.36, 1.0), 0.72)
-          solidify_material(shorts, 'RutaViva Black Shorts', (0.025, 0.03, 0.035, 1.0), 0.78)
-          solidify_material(shoes, 'RutaViva Dark Shoes', (0.018, 0.02, 0.025, 1.0), 0.52)
-
-          # Keep hair/beard original alpha/texture structure, but darken unlinked Principled base colors where possible.
-          for obj in [hair, beard, brows]:
-              if obj is None:
-                  continue
+          def darken_textured(obj,tint=(0.055,0.032,0.022,1)):
+              if not obj:return
               for slot in obj.material_slots:
-                  mat = slot.material
-                  if not mat or not mat.use_nodes:
-                      continue
-                  for node in mat.node_tree.nodes:
-                      if node.type == 'BSDF_PRINCIPLED' and not node.inputs['Base Color'].is_linked:
-                          node.inputs['Base Color'].default_value = (0.025, 0.018, 0.012, 1.0)
+                  m=slot.material
+                  if not m or not m.use_nodes:continue
+                  for p in [n for n in m.node_tree.nodes if n.type=='BSDF_PRINCIPLED']:
+                      inp=p.inputs.get('Base Color')
+                      if not inp:continue
+                      if inp.is_linked:
+                          old=inp.links[0]
+                          mix=m.node_tree.nodes.new('ShaderNodeMixRGB');mix.blend_type='MULTIPLY';mix.inputs[0].default_value=.82;mix.inputs[2].default_value=tint
+                          m.node_tree.links.new(old.from_socket,mix.inputs[1]);m.node_tree.links.remove(old);m.node_tree.links.new(mix.outputs[0],inp)
+                      else: inp.default_value=tint
+          for o in [hair,beard,brows]: darken_textured(o)
 
-          # Add a simple black smartwatch to the character's left wrist for the visual identity gate.
-          # It is a static accessory in this gate; rigging will be handled only after visual approval.
-          corners = [human.matrix_world @ Vector(c) for c in human.bound_box]
-          xmin, xmax = min(v.x for v in corners), max(v.x for v in corners)
-          ymin, ymax = min(v.y for v in corners), max(v.y for v in corners)
-          zmin, zmax = min(v.z for v in corners), max(v.z for v in corners)
-          height = zmax-zmin
-          center = Vector(((xmin+xmax)/2, (ymin+ymax)/2, (zmin+zmax)/2))
+          # Relaxed athletic stance instead of a T-pose.
+          for name,rot in {
+              'upperarm01.L':(0,0,math.radians(-48)),
+              'upperarm01.R':(0,0,math.radians(48)),
+              'lowerarm01.L':(math.radians(-6),math.radians(2),math.radians(-3)),
+              'lowerarm01.R':(math.radians(6),math.radians(-2),math.radians(3)),
+              'thigh.L':(0,0,math.radians(-2.5)),
+              'thigh.R':(0,0,math.radians(2.5)),
+          }.items():
+              b=rig.pose.bones.get(name)
+              if b:
+                  b.rotation_mode='XYZ';b.rotation_euler=rot
+          bpy.context.view_layer.update()
 
-          # Backdrop
-          bpy.ops.mesh.primitive_plane_add(size=8, location=(center.x, center.y, zmin-0.012))
-          floor = bpy.context.object
-          fmat = bpy.data.materials.new('Warm Light Floor')
-          fmat.diffuse_color = (0.70, 0.68, 0.64, 1)
-          floor.data.materials.append(fmat)
-          bpy.ops.mesh.primitive_plane_add(size=8, location=(center.x, center.y+1.0, center.z+0.4), rotation=(math.radians(90),0,0))
-          wall = bpy.context.object
-          wmat = bpy.data.materials.new('Soft Warm Wall')
-          wmat.diffuse_color = (0.80, 0.79, 0.76, 1)
-          wall.data.materials.append(wmat)
+          # True static black smartwatch at the left wrist for identity validation.
+          wb=rig.pose.bones.get('wrist.L')
+          if wb:
+              pos=rig.matrix_world @ wb.head
+              bpy.ops.mesh.primitive_cube_add(location=pos,scale=(0.035,0.018,0.045))
+              watch=bpy.context.object;watch.name='RutaViva_Black_Smartwatch'
+              wm=bpy.data.materials.new('Watch Black');wm.diffuse_color=(0.005,0.006,0.008,1);watch.data.materials.append(wm)
 
-          # Soft three-point lighting
-          for loc, energy, size, temp_name in [
-              ((-2.7,-3.5,4.7), 900, 3.5, 'Key'),
-              ((2.4,-2.2,3.2), 650, 3.0, 'Fill'),
-              ((0.7,1.0,4.4), 750, 2.0, 'Rim')]:
-              bpy.ops.object.light_add(type='AREA', location=loc)
-              l=bpy.context.object; l.name=temp_name; l.data.energy=energy; l.data.size=size
-              direction=center-l.location
-              l.rotation_euler=direction.to_track_quat('-Z','Y').to_euler()
+          # Human bounds after pose, including wearables except backdrop.
+          objs=[o for o in bpy.context.scene.objects if o.type=='MESH']
+          pts=[]
+          for o in objs:
+              if o.name.startswith('RutaViva') or o.parent==rig or o==human:
+                  pts += [o.matrix_world @ Vector(c) for c in o.bound_box]
+          xmin,xmax=min(v.x for v in pts),max(v.x for v in pts);ymin,ymax=min(v.y for v in pts),max(v.y for v in pts);zmin,zmax=min(v.z for v in pts),max(v.z for v in pts)
+          h=zmax-zmin;c=Vector(((xmin+xmax)/2,(ymin+ymax)/2,(zmin+zmax)/2))
 
-          scene=bpy.context.scene
-          scene.render.engine='BLENDER_EEVEE'
-          scene.render.resolution_x=768
-          scene.render.resolution_y=1366
-          scene.render.resolution_percentage=100
-          scene.render.image_settings.file_format='PNG'
-          scene.render.film_transparent=False
-          if scene.world is None:
-              scene.world=bpy.data.worlds.new('RutaViva World')
-          scene.world.color=(0.055,0.055,0.055)
+          # Premium neutral studio.
+          bpy.ops.mesh.primitive_plane_add(size=8,location=(c.x,c.y,zmin-.006));floor=bpy.context.object
+          fm=bpy.data.materials.new('Warm Oak Neutral');fm.diffuse_color=(0.46,0.40,0.33,1);fm.roughness=.72;floor.data.materials.append(fm)
+          bpy.ops.mesh.primitive_plane_add(size=8,location=(c.x,c.y+1.35,c.z+.35),rotation=(math.radians(90),0,0));wall=bpy.context.object
+          mm=bpy.data.materials.new('Warm Gray Wall');mm.diffuse_color=(0.69,0.68,0.66,1);mm.roughness=.88;wall.data.materials.append(mm)
 
-          def look_at(obj, target):
-              obj.rotation_euler=(target-obj.location).to_track_quat('-Z','Y').to_euler()
+          for loc,e,size,name in [((-2.4,-3.0,4.0),1000,3.0,'Key'),((2.3,-2.1,2.8),550,2.5,'Fill'),((0.8,1.0,3.8),700,2.0,'Rim')]:
+              bpy.ops.object.light_add(type='AREA',location=loc);l=bpy.context.object;l.name=name;l.data.energy=e;l.data.size=size;l.rotation_euler=(c-l.location).to_track_quat('-Z','Y').to_euler()
 
-          # Front portrait/full-body
-          bpy.ops.object.camera_add(location=(center.x, center.y-4.15, center.z+0.03))
-          cam=bpy.context.object
-          cam.data.lens=58
-          look_at(cam, center + Vector((0,0,height*0.01)))
-          scene.camera=cam
-          scene.render.filepath='/tmp/rutaviva_output/rutaviva_man_front.png'
-          bpy.ops.render.render(write_still=True)
+          scene=bpy.context.scene;scene.render.engine='BLENDER_EEVEE';scene.render.resolution_x=768;scene.render.resolution_y=1366;scene.render.resolution_percentage=100;scene.render.image_settings.file_format='PNG'
+          scene.view_settings.look='AgX - Medium High Contrast'
+          if scene.world is None:scene.world=bpy.data.worlds.new('World')
+          scene.world.color=(.035,.035,.035)
 
-          # Three-quarter view
-          cam.location=(center.x+2.0, center.y-3.65, center.z+0.05)
-          look_at(cam, center + Vector((0,0,height*0.01)))
-          scene.render.filepath='/tmp/rutaviva_output/rutaviva_man_threequarter.png'
-          bpy.ops.render.render(write_still=True)
-
-          bpy.ops.wm.save_as_mainfile(filepath='/tmp/rutaviva_output/rutaviva_man_candidate.blend')
-          for p in ['/tmp/rutaviva_output/rutaviva_man_front.png','/tmp/rutaviva_output/rutaviva_man_threequarter.png','/tmp/rutaviva_output/rutaviva_man_candidate.blend']:
-              if not os.path.exists(p) or os.path.getsize(p) < 1000:
-                  raise RuntimeError(f'Missing/empty output {p}')
-              print(f'OUTPUT {p} bytes={os.path.getsize(p)}')
-          print('RUTAVIVA_CANONICAL_MAN_VISUAL_GATE_RENDER=PASS')
+          bpy.ops.object.camera_add(location=(c.x,c.y-4.0,c.z));cam=bpy.context.object;cam.data.type='ORTHO';cam.data.ortho_scale=h*1.10;cam.rotation_euler=(c-cam.location).to_track_quat('-Z','Y').to_euler();scene.camera=cam
+          scene.render.filepath='/tmp/rutaviva_output/rutaviva_man_v2_front.png';bpy.ops.render.render(write_still=True)
+          cam.location=(c.x+2.2,c.y-3.6,c.z);cam.rotation_euler=(c-cam.location).to_track_quat('-Z','Y').to_euler();scene.render.filepath='/tmp/rutaviva_output/rutaviva_man_v2_threequarter.png';bpy.ops.render.render(write_still=True)
+          bpy.ops.wm.save_as_mainfile(filepath='/tmp/rutaviva_output/rutaviva_man_v2.blend')
+          for p in ['/tmp/rutaviva_output/rutaviva_man_v2_front.png','/tmp/rutaviva_output/rutaviva_man_v2_threequarter.png','/tmp/rutaviva_output/rutaviva_man_v2.blend']:
+              print(p,os.path.getsize(p))
+          print('RUTAVIVA_MAN_V2_RENDER=PASS')
           PY
-          "$BLENDER_BIN" -b --python /tmp/rutaviva_canonical_man.py
+          "$BLENDER_BIN" -b --python /tmp/build.py
           sha256sum /tmp/rutaviva_output/*
-
-      - name: Upload visual gate artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: rutaviva-canonical-man-visual-gate
+          name: rutaviva-canonical-man-visual-gate-v2
           path: /tmp/rutaviva_output/
           if-no-files-found: error
           retention-days: 7
