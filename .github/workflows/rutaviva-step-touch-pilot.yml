@@ -256,6 +256,16 @@ jobs:
           scene.render.image_settings.quality=88
           scene.render.filepath='/tmp/rutaviva_frames/frame_'
 
+          print('RUTAVIVA_SCENE_DIAGNOSTIC_BEGIN')
+          for o in bpy.context.scene.objects:
+              if o.type == 'MESH':
+                  dims=tuple(round(v,4) for v in o.dimensions)
+                  loc=tuple(round(v,4) for v in o.location)
+                  mats=[slot.material.name if slot.material else 'NONE' for slot in o.material_slots]
+                  print(f'SCENE_MESH name={o.name} dims={dims} loc={loc} parent={o.parent.name if o.parent else "NONE"} mats={mats}')
+          print('RUTAVIVA_SCENE_DIAGNOSTIC_END')
+          raise RuntimeError('RUTAVIVA_DIAGNOSTIC_STOP_AFTER_OBJECT_DUMP')
+
           bpy.ops.wm.save_as_mainfile(filepath='/tmp/rutaviva_output/rutaviva_step_touch_pilot.blend')
           bpy.ops.render.render(animation=True)
           print('RUTAVIVA_STEP_TOUCH_FRAMES=PASS')
