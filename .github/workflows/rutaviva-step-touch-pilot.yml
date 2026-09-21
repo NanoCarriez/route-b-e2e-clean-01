@@ -230,11 +230,8 @@ jobs:
           zmin,zmax=min(v.z for v in pts),max(v.z for v in pts)
           h=zmax-zmin; c=Vector(((xmin+xmax)/2,(ymin+ymax)/2,(zmin+zmax)/2))
 
-          # RutaViva neutral indoor environment.
-          bpy.ops.mesh.primitive_plane_add(size=8, location=(c.x,c.y,zmin-.006)); floor=bpy.context.object
-          fm=bpy.data.materials.new('Warm Oak Neutral'); fm.diffuse_color=(0.46,0.40,0.33,1); fm.roughness=.72; floor.data.materials.append(fm)
-          bpy.ops.mesh.primitive_plane_add(size=8, location=(c.x,c.y+1.35,c.z+.35), rotation=(math.radians(90),0,0)); wall=bpy.context.object
-          mm=bpy.data.materials.new('Warm Gray Wall'); mm.diffuse_color=(0.69,0.68,0.66,1); mm.roughness=.88; wall.data.materials.append(mm)
+          # Stage A motion gate uses a clean world backdrop only. The prior
+          # floor/wall planes occluded the lower body in the orthographic camera.
 
           for loc,e,size,name in [((-2.4,-3.0,4.0),950,3.0,'Key'),((2.3,-2.1,2.8),500,2.5,'Fill'),((0.8,1.0,3.8),650,2.0,'Rim')]:
               bpy.ops.object.light_add(type='AREA',location=loc); l=bpy.context.object; l.name=name; l.data.energy=e; l.data.size=size; l.rotation_euler=(c-l.location).to_track_quat('-Z','Y').to_euler()
@@ -246,7 +243,7 @@ jobs:
           scene.frame_start=1; scene.frame_end=93; scene.frame_step=2
           scene.view_settings.look='AgX - Medium High Contrast'
           if scene.world is None: scene.world=bpy.data.worlds.new('World')
-          scene.world.color=(.035,.035,.035)
+          scene.world.color=(.62,.59,.54)
 
           bpy.ops.object.camera_add(location=(c.x,c.y-4.0,c.z)); cam=bpy.context.object
           cam.data.type='ORTHO'; cam.data.ortho_scale=h*1.16; cam.rotation_euler=(c-cam.location).to_track_quat('-Z','Y').to_euler(); scene.camera=cam
