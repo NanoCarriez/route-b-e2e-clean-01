@@ -64,25 +64,20 @@ jobs:
           cat > /tmp/rutaviva_sentinel.py <<'PY'
           import bpy, math, mathutils, os
           bpy.ops.wm.read_factory_settings(use_empty=True)
-
           bpy.ops.mesh.primitive_cube_add(location=(0, 0, 1))
           cube = bpy.context.object
           cube.rotation_euler = (math.radians(15), 0, math.radians(25))
-
           bpy.ops.mesh.primitive_plane_add(size=8, location=(0, 0, 0))
-
           bpy.ops.object.light_add(type='AREA', location=(3, -4, 6))
           light = bpy.context.object
           light.data.energy = 900
           light.data.shape = 'DISK'
           light.data.size = 5
-
           bpy.ops.object.camera_add(location=(5, -7, 4.5))
           cam = bpy.context.object
           bpy.context.scene.camera = cam
           direction = mathutils.Vector((0, 0, 1)) - cam.location
           cam.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
-
           scene = bpy.context.scene
           scene.world = bpy.data.worlds.new('SentinelWorld')
           scene.world.color = (0.06, 0.06, 0.06)
@@ -93,7 +88,6 @@ jobs:
           scene.render.image_settings.file_format = 'PNG'
           scene.render.filepath = '/tmp/rutaviva_blender_sentinel.png'
           bpy.ops.render.render(write_still=True)
-
           path = scene.render.filepath
           assert os.path.exists(path) and os.path.getsize(path) > 1000, path
           print(f'SENTINEL_RENDER_PASS path={path} bytes={os.path.getsize(path)}')
@@ -101,4 +95,87 @@ jobs:
           "$BLENDER_BIN" -b --python /tmp/rutaviva_sentinel.py
           test -s /tmp/rutaviva_blender_sentinel.png
           sha256sum /tmp/rutaviva_blender_sentinel.png
-          stat -c 'OUTPUT_BYTES=%s' /tmp/rutaviva_blender_sentinel.png
+
+      - name: Install and enable MPFB extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$BLENDER_BIN" --command extension repo-list
+          "$BLENDER_BIN" --command extension install -s -e mpfb
+          "$BLENDER_BIN" --command extension list | tee /tmp/extensions.txt
+          grep -i 'mpfb' /tmp/extensions.txt
+
+      - name: Create and render one MPFB human
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/mpfb_human_sentinel.py <<'PY'
+          import bpy, math, mathutils, os
+          from mathutils import Vector
+
+          addons = [a.module for a in bpy.context.preferences.addons]
+          print('ENABLED_ADDONS=' + ','.join(addons))
+          assert any('mpfb' in a.lower() for a in addons), addons
+          assert hasattr(bpy.ops, 'mpfb') and hasattr(bpy.ops.mpfb, 'create_human')
+
+          result = bpy.ops.mpfb.create_human()
+          print('MPFB_CREATE_RESULT=' + repr(result))
+          assert 'FINISHED' in result
+
+          meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+          assert meshes, 'No mesh objects created by MPFB'
+          human = max(meshes, key=lambda o: len(o.data.vertices))
+          verts = len(human.data.vertices)
+          print(f'MPFB_HUMAN_OBJECT={human.name} VERTICES={verts}')
+          assert verts > 1000, verts
+
+          corners = [human.matrix_world @ Vector(c) for c in human.bound_box]
+          xmin, xmax = min(v.x for v in corners), max(v.x for v in corners)
+          ymin, ymax = min(v.y for v in corners), max(v.y for v in corners)
+          zmin, zmax = min(v.z for v in corners), max(v.z for v in corners)
+          center = Vector(((xmin+xmax)/2, (ymin+ymax)/2, (zmin+zmax)/2))
+          height = max(zmax-zmin, 0.1)
+          print(f'MPFB_HUMAN_BOUNDS=({xmin:.3f},{xmax:.3f},{ymin:.3f},{ymax:.3f},{zmin:.3f},{zmax:.3f}) HEIGHT={height:.3f}')
+
+          mat = bpy.data.materials.new('SentinelHumanMaterial')
+          mat.diffuse_color = (0.45, 0.55, 0.68, 1.0)
+          if len(human.data.materials) == 0:
+              human.data.materials.append(mat)
+          else:
+              human.data.materials[0] = mat
+
+          bpy.ops.mesh.primitive_plane_add(size=max(height*3, 4), location=(center.x, center.y, zmin-0.01))
+
+          bpy.ops.object.light_add(type='AREA', location=(center.x + height, center.y - height, zmax + height))
+          light = bpy.context.object
+          light.data.energy = 1100
+          light.data.size = max(height, 2)
+
+          cam_dist = max(height * 2.2, 3.0)
+          bpy.ops.object.camera_add(location=(center.x, center.y - cam_dist, center.z + height*0.05))
+          cam = bpy.context.object
+          direction = center - cam.location
+          cam.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
+          cam.data.lens = 55
+
+          scene = bpy.context.scene
+          scene.camera = cam
+          if scene.world is None:
+              scene.world = bpy.data.worlds.new('MPFBSentinelWorld')
+          scene.world.color = (0.08, 0.08, 0.08)
+          scene.render.engine = 'BLENDER_EEVEE'
+          scene.render.resolution_x = 256
+          scene.render.resolution_y = 512
+          scene.render.resolution_percentage = 100
+          scene.render.image_settings.file_format = 'PNG'
+          scene.render.filepath = '/tmp/rutaviva_mpfb_human_sentinel.png'
+          bpy.ops.render.render(write_still=True)
+
+          path = scene.render.filepath
+          assert os.path.exists(path) and os.path.getsize(path) > 1000, path
+          print(f'MPFB_HUMAN_RENDER_PASS path={path} bytes={os.path.getsize(path)} vertices={verts}')
+          PY
+          "$BLENDER_BIN" -b --python /tmp/mpfb_human_sentinel.py
+          test -s /tmp/rutaviva_mpfb_human_sentinel.png
+          sha256sum /tmp/rutaviva_mpfb_human_sentinel.png
+          stat -c 'MPFB_OUTPUT_BYTES=%s' /tmp/rutaviva_mpfb_human_sentinel.png
