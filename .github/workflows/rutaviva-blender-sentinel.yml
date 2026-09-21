@@ -101,7 +101,7 @@ jobs:
         run: |
           set -euo pipefail
           "$BLENDER_BIN" --command extension repo-list
-          "$BLENDER_BIN" --command extension install -s -e mpfb
+          "$BLENDER_BIN" --online-mode --command extension install -s -e mpfb
           "$BLENDER_BIN" --command extension list | tee /tmp/extensions.txt
           grep -i 'mpfb' /tmp/extensions.txt
 
@@ -110,7 +110,7 @@ jobs:
         run: |
           set -euo pipefail
           cat > /tmp/mpfb_human_sentinel.py <<'PY'
-          import bpy, math, mathutils, os
+          import bpy, os
           from mathutils import Vector
 
           addons = [a.module for a in bpy.context.preferences.addons]
@@ -145,7 +145,6 @@ jobs:
               human.data.materials[0] = mat
 
           bpy.ops.mesh.primitive_plane_add(size=max(height*3, 4), location=(center.x, center.y, zmin-0.01))
-
           bpy.ops.object.light_add(type='AREA', location=(center.x + height, center.y - height, zmax + height))
           light = bpy.context.object
           light.data.energy = 1100
