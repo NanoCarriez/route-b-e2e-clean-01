@@ -116,6 +116,7 @@ jobs:
           # Stage A gate: simple materials and zero asset subdivision keep EEVEE
           # fast enough for motion QA while preserving the canonical silhouette.
           solid(human,'RutaViva Skin Gate',(0.48,0.27,0.16,1),.64)
+          solid(eyes,'RutaViva Eye Gate',(0.72,0.76,0.78,1),.38)
           solid(shirt,'RutaViva Slate Blue',(0.16,0.28,0.35,1),.68)
           solid(shorts,'RutaViva Black Shorts',(0.018,0.022,0.026,1),.76)
           solid(shoes,'RutaViva Dark Shoes',(0.012,0.014,0.018,1),.55)
