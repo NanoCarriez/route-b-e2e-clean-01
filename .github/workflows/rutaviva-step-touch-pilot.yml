@@ -243,23 +243,23 @@ jobs:
           bpy.ops.object.camera_add(location=(c.x,c.y-4.0,c.z)); cam=bpy.context.object
           cam.data.type='ORTHO'; cam.data.ortho_scale=h*1.16; cam.rotation_euler=(c-cam.location).to_track_quat('-Z','Y').to_euler(); scene.camera=cam
 
-          scene.render.image_settings.file_format='FFMPEG'
-          scene.render.ffmpeg.format='MPEG4'
-          scene.render.ffmpeg.codec='H264'
-          scene.render.ffmpeg.constant_rate_factor='MEDIUM'
-          scene.render.ffmpeg.ffmpeg_preset='GOOD'
-          scene.render.filepath='/tmp/rutaviva_output/rutaviva_step_touch_pilot.mp4'
+          # Official Blender 5.2.2 Linux build lacks FFMPEG output; render PNGs,
+          # then encode H.264 with the runner's ffmpeg.
+          os.makedirs('/tmp/rutaviva_frames', exist_ok=True)
+          scene.render.image_settings.file_format='PNG'
+          scene.render.image_settings.color_mode='RGB'
+          scene.render.filepath='/tmp/rutaviva_frames/frame_'
 
           bpy.ops.wm.save_as_mainfile(filepath='/tmp/rutaviva_output/rutaviva_step_touch_pilot.blend')
           bpy.ops.render.render(animation=True)
-
-          out='/tmp/rutaviva_output/rutaviva_step_touch_pilot.mp4'
-          if not os.path.exists(out) or os.path.getsize(out) < 10000:
-              raise RuntimeError('MP4 missing or unexpectedly small')
-          print('RUTAVIVA_STEP_TOUCH_RENDER=PASS')
-          print('OUTPUT_MP4_BYTES=' + str(os.path.getsize(out)))
+          print('RUTAVIVA_STEP_TOUCH_FRAMES=PASS')
           PY
           "$BLENDER_BIN" -b --python /tmp/build_step_touch.py
+          ffmpeg -y -framerate 30 -start_number 1 -i /tmp/rutaviva_frames/frame_%04d.png \
+            -c:v libx264 -pix_fmt yuv420p -crf 20 -preset medium -movflags +faststart \
+            /tmp/rutaviva_output/rutaviva_step_touch_pilot.mp4
+          test "$(stat -c%s /tmp/rutaviva_output/rutaviva_step_touch_pilot.mp4)" -gt 10000
+          echo "RUTAVIVA_STEP_TOUCH_RENDER=PASS"
           ls -lh /tmp/rutaviva_output/
           sha256sum /tmp/rutaviva_output/*
 
